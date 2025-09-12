@@ -1,27 +1,24 @@
-import React, { useEffect, useState } from "react";
-import {
-  View,
-  Text,
-  FlatList,
-  Image,
-  TouchableOpacity,
-  ActivityIndicator,
-  StyleSheet,
-} from "react-native";
-import { supabase } from "../lib/supabase";
-import { AntDesign } from "@expo/vector-icons"; // icons
+"use client"
+
+import { useEffect, useState } from "react"
+import { View, Text, FlatList, Image, TouchableOpacity, ActivityIndicator, StyleSheet, TextInput } from "react-native"
+import { SafeAreaView } from "react-native-safe-area-context"
+import { supabase } from "../lib/supabase"
+import { AntDesign, Ionicons } from "@expo/vector-icons"
 
 export default function LikedItemsScreen({ navigation }) {
-  const [likedItems, setLikedItems] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [likedItems, setLikedItems] = useState([])
+  const [filteredItems, setFilteredItems] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [searchQuery, setSearchQuery] = useState("")
 
   useEffect(() => {
     const fetchLikedItems = async () => {
       try {
         const {
           data: { user },
-        } = await supabase.auth.getUser();
-        if (!user) return;
+        } = await supabase.auth.getUser()
+        if (!user) return
 
         const { data, error } = await supabase
           .from("liked_items")
@@ -31,103 +28,212 @@ export default function LikedItemsScreen({ navigation }) {
               item_id,
               title,
               price_per_day,
-              days,
               image_url,
-              users (
-                first_name,
-                last_name
-              ),
+              user_id,
               categories (
                 name
               )
             )
           `)
-          .eq("user_id", user.id);
+          .eq("user_id", user.id)
 
         if (error) {
-          console.error("Error fetching liked items:", error);
+          console.error("Error fetching liked items:", error)
         } else {
-          setLikedItems(data || []);
+          const itemsWithOwners = await Promise.all(
+            (data || []).map(async (likedItem) => {
+              if (likedItem.items?.user_id) {
+                const { data: ownerData } = await supabase
+                  .from("users")
+                  .select("first_name, last_name")
+                  .eq("user_id", likedItem.items.user_id)
+                  .single()
+
+                return {
+                  ...likedItem,
+                  items: {
+                    ...likedItem.items,
+                    owner: ownerData,
+                  },
+                }
+              }
+              return likedItem
+            }),
+          )
+
+          setLikedItems(itemsWithOwners)
+          setFilteredItems(itemsWithOwners)
         }
       } catch (err) {
-        console.error("Failed to fetch liked items:", err);
+        console.error("Failed to fetch liked items:", err)
       } finally {
-        setLoading(false);
+        setLoading(false)
       }
-    };
+    }
 
-    fetchLikedItems();
-  }, []);
+    fetchLikedItems()
+  }, [])
+
+  useEffect(() => {
+    if (searchQuery.trim() === "") {
+      setFilteredItems(likedItems)
+    } else {
+      const filtered = likedItems.filter((item) => item.items.title.toLowerCase().includes(searchQuery.toLowerCase()))
+      setFilteredItems(filtered)
+    }
+  }, [searchQuery, likedItems])
+
+  const removeLikedItem = async (likedItemId, itemId) => {
+    try {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser()
+      if (!user) return
+
+      const { error } = await supabase.from("liked_items").delete().eq("user_id", user.id).eq("item_id", itemId)
+
+      if (error) throw error
+
+      const updatedItems = likedItems.filter((item) => item.id !== likedItemId)
+      setLikedItems(updatedItems)
+      setFilteredItems(updatedItems)
+    } catch (err) {
+      console.error("Error removing liked item:", err)
+      alert("Failed to remove item from favorites")
+    }
+  }
 
   if (loading) {
-    return <ActivityIndicator size="large" style={{ marginTop: 40 }} />;
+    return (
+      <SafeAreaView style={styles.safeArea}>
+        <ActivityIndicator size="large" color="#FF9900" style={{ marginTop: 40 }} />
+      </SafeAreaView>
+    )
   }
 
   return (
-    <View style={styles.container}>
-      {likedItems.length === 0 ? (
-        <Text style={styles.emptyText}>NO FOLLOWING LIKED ITEMS</Text>
-      ) : (
-        <FlatList
-          data={likedItems}
-          keyExtractor={(item) => item.id}
-          renderItem={({ item }) => {
-            const owner =
-              `${item.items.users?.first_name || ""} ${
-                item.items.users?.last_name || ""
-              }`.trim() || "Unknown Owner";
-            const category = item.items.categories?.name || "Others";
+    <SafeAreaView style={styles.safeArea}>
+      <View style={styles.header}>
+        <TouchableOpacity onPress={() => navigation.goBack()}>
+          <Ionicons name="arrow-back" size={24} color="#000" />
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>Liked Items</Text>
+        <View style={{ width: 24 }} />
+      </View>
 
-            return (
-              <TouchableOpacity
-                style={styles.card}
-                onPress={() =>
-                  navigation.navigate("ItemDetail", { item: item.items })
-                }
-              >
-                {/* Left: Image */}
-                <Image
-                  source={{ uri: item.items.image_url }}
-                  style={styles.image}
-                />
-
-                {/* Middle: Info */}
-                <View style={styles.info}>
-                  <Text style={styles.itemTitle}>{item.items.title}</Text>
-                  <Text style={styles.price}>
-                    ₱{item.items.price_per_day} for {item.items.days || 1} day/s
-                  </Text>
-
-                  {/* Category Badge */}
-                  <View style={styles.badge}>
-                    <Text style={styles.badgeText}>{category}</Text>
-                  </View>
-
-                  {/* Owner Row */}
-                  <View style={styles.ownerRow}>
-                    <AntDesign name="user" size={14} color="#555" />
-                    <Text style={styles.ownerName}>{owner}</Text>
-                  </View>
-                </View>
-
-                {/* Right: Heart */}
-                <View style={styles.heartContainer}>
-                  <AntDesign name="heart" size={22} color="red" />
-                </View>
-              </TouchableOpacity>
-            );
-          }}
+      <View style={styles.searchContainer}>
+        <Ionicons name="search" size={20} color="#888" style={styles.searchIcon} />
+        <TextInput
+          style={styles.searchInput}
+          placeholder="Search Liked Items..."
+          placeholderTextColor="#888"
+          value={searchQuery}
+          onChangeText={setSearchQuery}
         />
-      )}
-    </View>
-  );
+      </View>
+
+      <View style={styles.container}>
+        {filteredItems.length === 0 ? (
+          <Text style={styles.emptyText}>
+            {searchQuery ? "No items found matching your search" : "NO FOLLOWING LIKED ITEMS"}
+          </Text>
+        ) : (
+          <FlatList
+            data={filteredItems}
+            keyExtractor={(item) => item.id.toString()}
+            showsVerticalScrollIndicator={false}
+            renderItem={({ item }) => {
+              const owner =
+                `${item.items.owner?.first_name || ""} ${item.items.owner?.last_name || ""}`.trim() || "Unknown Owner"
+              const category = item.items.categories?.name || "Others"
+
+              return (
+                <TouchableOpacity
+                  style={styles.card}
+                  onPress={() => navigation.navigate("ItemDetails", { item: item.items })}
+                >
+                  <Image source={{ uri: item.items.image_url }} style={styles.image} />
+
+                  <View style={styles.info}>
+                    <Text style={styles.itemTitle}>{item.items.title}</Text>
+                    <Text style={styles.price}>₱{item.items.price_per_day} per day</Text>
+
+                    <View style={styles.badge}>
+                      <Text style={styles.badgeText}>{category}</Text>
+                    </View>
+
+                    <View style={styles.ownerRow}>
+                      <AntDesign name="user" size={14} color="#555" />
+                      <Text style={styles.ownerName}>{owner}</Text>
+                    </View>
+                  </View>
+
+                  <TouchableOpacity
+                    style={styles.heartContainer}
+                    onPress={() => removeLikedItem(item.id, item.items.item_id)}
+                  >
+                    <AntDesign name="heart" size={22} color="red" />
+                  </TouchableOpacity>
+                </TouchableOpacity>
+              )
+            }}
+          />
+        )}
+      </View>
+    </SafeAreaView>
+  )
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#fff", padding: 12 },
+  safeArea: {
+    flex: 1,
+    backgroundColor: "#FDF2E9",
+  },
+  header: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: "#FDF2E9",
+  },
+  headerTitle: {
+    fontSize: 18,
+    fontWeight: "bold",
+    color: "#333",
+  },
+  searchContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#fff",
+    marginHorizontal: 16,
+    marginBottom: 16,
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    elevation: 1,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+  },
+  searchIcon: {
+    marginRight: 8,
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: 16,
+    color: "#333",
+    paddingVertical: 4,
+  },
+  container: {
+    flex: 1,
+    backgroundColor: "#FDF2E9",
+    paddingHorizontal: 12,
+  },
   emptyText: {
     textAlign: "center",
-    marginTop: 20,
+    marginTop: 40,
     color: "#777",
     fontSize: 14,
     fontWeight: "500",
@@ -168,5 +274,6 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
     paddingLeft: 6,
+    padding: 8,
   },
-});
+})

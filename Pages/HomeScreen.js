@@ -1,4 +1,6 @@
-import React, { useEffect, useState } from "react";
+"use client"
+
+import { useEffect, useState } from "react"
 import {
   View,
   Text,
@@ -9,84 +11,69 @@ import {
   Image,
   ScrollView,
   ActivityIndicator,
-} from "react-native";
-import { Ionicons, AntDesign } from "@expo/vector-icons";
-import {
-  SafeAreaView,
-  useSafeAreaInsets,
-} from "react-native-safe-area-context";
-import { useNavigation } from "@react-navigation/native";
-import { supabase } from "../lib/supabase"; // adjust path if different
+} from "react-native"
+import { Ionicons, AntDesign } from "@expo/vector-icons"
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context"
+import { useNavigation } from "@react-navigation/native"
+import { supabase } from "../lib/supabase" // adjust path if different
 
-const categories = ["Tools", "Car", "Clothing & Accessories", "More..."];
+const categories = ["Tools", "Car", "Clothing & Accessories", "More..."]
 
 export default function HomeScreen() {
-  const insets = useSafeAreaInsets();
-  const navigation = useNavigation();
-  const [items, setItems] = useState([]);
-  const [loading, setLoading] = useState(false);
+  const insets = useSafeAreaInsets()
+  const navigation = useNavigation()
+  const [items, setItems] = useState([])
+  const [loading, setLoading] = useState(false)
 
   const fetchItems = async () => {
-    setLoading(true);
-    const { data, error } = await supabase
-  .from("items")
-  .select("*")
-  .eq("available", true)
-  .eq("is_verified", true);
+    setLoading(true)
+    const { data, error } = await supabase.from("items").select("*").eq("available", true).eq("is_verified", true)
 
     if (error) {
-      console.error("Error fetching items:", error);
+      console.error("Error fetching items:", error)
     } else {
-      setItems(data);
+      setItems(data)
     }
 
-    setLoading(false);
-  };
+    setLoading(false)
+  }
 
   useEffect(() => {
-    fetchItems();
-  }, []);
+    fetchItems()
+  }, [])
 
-const renderItem = ({ item }) => (
-  <TouchableOpacity
-    onPress={() => navigation.navigate("ItemDetails", { item })}
-  >
-    <View style={styles.card}>
-      <Image
-        source={{ uri: item.image_url }}
-        style={styles.cardImage}
-        resizeMode="cover"
-      />
-      <View style={styles.cardContent}>
-        <Text style={styles.cardTitle}>{item.title}</Text>
-        <Text style={styles.cardUser}>{item.location}</Text>
-        <View style={styles.cardFooter}>
-          <Text style={styles.cardPrice}>₱{item.price_per_day}</Text>
+  const renderItem = ({ item }) => (
+    <TouchableOpacity onPress={() => navigation.navigate("ItemDetails", { item })} style={styles.cardWrapper}>
+      <View style={styles.card}>
+        <Image source={{ uri: item.image_url }} style={styles.cardImage} resizeMode="cover" />
+        <View style={styles.cardContent}>
+          <Text style={styles.cardTitle} numberOfLines={2}>
+            {item.title}
+          </Text>
+          <Text style={styles.cardUser} numberOfLines={1}>
+            {item.location}
+          </Text>
+          <View style={styles.cardFooter}>
+            <Text style={styles.cardPrice}>₱{item.price_per_day}/day</Text>
+          </View>
         </View>
       </View>
-    </View>
-  </TouchableOpacity>
-);
+    </TouchableOpacity>
+  )
 
   return (
-    <SafeAreaView
-      style={[styles.safeArea, { paddingTop: insets.top, paddingBottom: 0 }]}
-    >
+    <SafeAreaView style={[styles.safeArea, { paddingTop: insets.top, paddingBottom: 0 }]}>
       <View style={styles.headerRow}>
         <Ionicons name="menu" size={24} color="#000" />
         <View style={styles.searchContainer}>
-          <TextInput
-            style={styles.searchInput}
-            placeholder="Search"
-            placeholderTextColor="#888"
-          />
+          <TextInput style={styles.searchInput} placeholder="Search" placeholderTextColor="#888" />
           <TouchableOpacity style={styles.searchButton}>
             <Text style={styles.searchButtonText}>Search</Text>
           </TouchableOpacity>
         </View>
         <TouchableOpacity onPress={() => navigation.navigate("LikedItems")}>
-  <AntDesign name="hearto" size={26} color="#000" />
-</TouchableOpacity>
+          <AntDesign name="hearto" size={26} color="#000" />
+        </TouchableOpacity>
       </View>
 
       <ScrollView
@@ -105,59 +92,41 @@ const renderItem = ({ item }) => (
       <Text style={styles.itemsTitle}>Items</Text>
 
       {loading ? (
-        <ActivityIndicator
-          size="large"
-          color="#FF9900"
-          style={{ marginTop: 30 }}
-        />
+        <ActivityIndicator size="large" color="#FF9900" style={{ marginTop: 30 }} />
       ) : (
         <FlatList
           data={items}
           keyExtractor={(item) => item.item_id?.toString()}
           numColumns={2}
-          contentContainerStyle={[styles.itemsList, { paddingBottom: 120 }]}
+          contentContainerStyle={[styles.itemsList, { paddingBottom: 100 }]}
           renderItem={renderItem}
+          showsVerticalScrollIndicator={false}
         />
       )}
 
       <View style={styles.bottomNav}>
-        <TouchableOpacity
-          style={styles.navItem}
-          onPress={() => navigation.navigate("Home")}
-        >
+        <TouchableOpacity style={styles.navItem} onPress={() => navigation.navigate("Home")}>
           <Ionicons name="home" size={24} color="#000" />
           <Text style={styles.navText}>Home</Text>
         </TouchableOpacity>
-        <TouchableOpacity
-          style={styles.navItem}
-          onPress={() => navigation.navigate("Inbox")}
-        >
+        <TouchableOpacity style={styles.navItem} onPress={() => navigation.navigate("Inbox")}>
           <Ionicons name="chatbubble-ellipses-outline" size={24} color="#000" />
           <Text style={styles.navText}>Inbox</Text>
         </TouchableOpacity>
-        <TouchableOpacity
-          style={styles.addButton}
-          onPress={() => navigation.navigate("PostItems")}
-        >
+        <TouchableOpacity style={styles.addButton} onPress={() => navigation.navigate("PostItems")}>
           <AntDesign name="plus" size={32} color="#fff" />
         </TouchableOpacity>
-        <TouchableOpacity
-          style={styles.navItem}
-          onPress={() => navigation.navigate("Notification")}
-        >
+        <TouchableOpacity style={styles.navItem} onPress={() => navigation.navigate("Notification")}>
           <Ionicons name="notifications-outline" size={24} color="#000" />
           <Text style={styles.navText}>Notification</Text>
         </TouchableOpacity>
-        <TouchableOpacity
-          style={styles.navItem}
-          onPress={() => navigation.navigate("Profile")}
-        >
+        <TouchableOpacity style={styles.navItem} onPress={() => navigation.navigate("Profile")}>
           <Ionicons name="person-outline" size={24} color="#000" />
           <Text style={styles.navText}>Profile</Text>
         </TouchableOpacity>
       </View>
     </SafeAreaView>
-  );
+  )
 }
 
 const styles = StyleSheet.create({
@@ -234,13 +203,17 @@ const styles = StyleSheet.create({
     color: "#222",
   },
   itemsList: {
-    paddingHorizontal: 10,
-    paddingBottom: 90,
+    paddingHorizontal: 8,
+    paddingTop: 8,
+  },
+  cardWrapper: {
+    flex: 1,
+    margin: 6,
+    maxWidth: "48%",
   },
   card: {
     backgroundColor: "#fff",
     borderRadius: 16,
-    margin: 7,
     flex: 1,
     elevation: 2,
     shadowColor: "#000",
@@ -248,27 +221,27 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     shadowOffset: { width: 0, height: 2 },
     overflow: "hidden",
-    minWidth: 160,
-    maxWidth: "48%",
   },
   cardImage: {
     width: "100%",
-    height: 90,
+    height: 120,
     borderTopLeftRadius: 16,
     borderTopRightRadius: 16,
   },
   cardContent: {
-    padding: 10,
+    padding: 12,
   },
   cardTitle: {
     fontWeight: "bold",
-    fontSize: 14,
+    fontSize: 15,
     color: "#222",
+    marginBottom: 4,
+    lineHeight: 20,
   },
   cardUser: {
-    fontSize: 11,
-    color: "#888",
-    marginBottom: 6,
+    fontSize: 12,
+    color: "#666",
+    marginBottom: 8,
   },
   cardFooter: {
     flexDirection: "row",
@@ -278,7 +251,7 @@ const styles = StyleSheet.create({
   cardPrice: {
     color: "#FF9900",
     fontWeight: "bold",
-    fontSize: 13,
+    fontSize: 14,
   },
   bottomNav: {
     position: "absolute",
@@ -321,4 +294,4 @@ const styles = StyleSheet.create({
     borderColor: "#FFF5E9",
     elevation: 5,
   },
-});
+})
