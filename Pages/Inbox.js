@@ -1,30 +1,154 @@
-import React, { useState } from "react";
-import {
-  View,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  StyleSheet,
-  FlatList,
-  Image,
-  ScrollView,
-  Modal,
-} from "react-native";
-import { Ionicons, AntDesign } from "@expo/vector-icons";
-import {
-  SafeAreaView,
-  useSafeAreaInsets,
-} from "react-native-safe-area-context";
-import { useNavigation } from "@react-navigation/native";
+"use client"
+
+import { useState, useEffect, useCallback } from "react"
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, FlatList, Image } from "react-native"
+import { Ionicons, AntDesign } from "@expo/vector-icons"
+import { SafeAreaView } from "react-native-safe-area-context"
+import { useNavigation, useFocusEffect } from "@react-navigation/native"
+import { supabase } from "../lib/supabase"
 
 export default function InboxScreen() {
-  const navigation = useNavigation();
+  const navigation = useNavigation()
+  const [conversations, setConversations] = useState([])
+  const [searchQuery, setSearchQuery] = useState("")
+  const [currentUserId, setCurrentUserId] = useState(null)
+
+  useEffect(() => {
+    getCurrentUser()
+  }, [])
+
+  useFocusEffect(
+    useCallback(() => {
+      if (currentUserId) {
+        fetchConversations()
+      }
+    }, [currentUserId]),
+  )
+
+  const getCurrentUser = async () => {
+    try {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser()
+      if (user) {
+        setCurrentUserId(user.id)
+      }
+    } catch (error) {
+      console.error("Error getting current user:", error)
+    }
+  }
+
+  const fetchConversations = async () => {
+    try {
+      const { data: messages, error } = await supabase
+        .from("messages")
+        .select("*")
+        .or(`sender_id.eq.${currentUserId},receiver_id.eq.${currentUserId}`)
+        .order("created_at", { ascending: false })
+
+      if (error) {
+        console.error("Error fetching messages:", error)
+        return
+      }
+
+      const conversationsMap = new Map()
+
+      for (const message of messages) {
+        const partnerId = message.sender_id === currentUserId ? message.receiver_id : message.sender_id
+
+        if (!conversationsMap.has(partnerId)) {
+          const { data: userData } = await supabase.auth.admin.getUserById(partnerId)
+
+          conversationsMap.set(partnerId, {
+            id: partnerId,
+            name: userData?.user?.user_metadata?.full_name || userData?.user?.email || "Unknown User",
+            lastMessage: message.content,
+            avatar:
+              userData?.user?.user_metadata?.avatar_url ||
+              `https://ui-avatars.com/api/?name=${encodeURIComponent(userData?.user?.email || "User")}&background=random`,
+            unread: message.sender_id !== currentUserId && !message.read,
+            timestamp: formatTimestamp(message.created_at),
+            lastMessageTime: message.created_at,
+          })
+        }
+      }
+
+      const conversationsArray = Array.from(conversationsMap.values()).sort(
+        (a, b) => new Date(b.lastMessageTime) - new Date(a.lastMessageTime),
+      )
+
+      setConversations(conversationsArray)
+    } catch (error) {
+      console.error("Error fetching conversations:", error)
+    }
+  }
+
+  const formatTimestamp = (timestamp) => {
+    const now = new Date()
+    const messageTime = new Date(timestamp)
+    const diffInMinutes = Math.floor((now - messageTime) / (1000 * 60))
+
+    if (diffInMinutes < 60) {
+      return `${diffInMinutes}m`
+    } else if (diffInMinutes < 1440) {
+      return `${Math.floor(diffInMinutes / 60)}h`
+    } else {
+      return `${Math.floor(diffInMinutes / 1440)}d`
+    }
+  }
+
+  const renderConversationItem = ({ item }) => (
+    <TouchableOpacity
+      style={styles.conversationItem}
+      onPress={() =>
+        navigation.navigate("DirectChat", {
+          itemId: item.id,
+          ownerId: item.id,
+          ownerName: item.name,
+          itemName: "Chat",
+          itemImage: item.avatar,
+        })
+      }
+    >
+      <View style={styles.avatarContainer}>
+        <Image source={{ uri: item.avatar }} style={styles.avatar} />
+        {item.unread && <View style={styles.unreadDot} />}
+      </View>
+      <View style={styles.messageContent}>
+        <Text style={styles.senderName}>{item.name}</Text>
+        <Text style={styles.lastMessage} numberOfLines={1}>
+          {item.lastMessage}
+        </Text>
+      </View>
+      <Text style={styles.timestamp}>{item.timestamp}</Text>
+    </TouchableOpacity>
+  )
 
   return (
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.container}>
-        <Text style={styles.header}>Inbox</Text>
-        <Text style={styles.text}>No messages yet.</Text>
+        <View style={styles.header}>
+          <View style={styles.searchContainer}>
+            <Ionicons name="search" size={20} color="#999" style={styles.searchIcon} />
+            <TextInput
+              style={styles.searchInput}
+              placeholder="Search Messages"
+              placeholderTextColor="#999"
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+            />
+          </View>
+        </View>
+
+        <Text style={styles.messagesTitle}>Messages</Text>
+
+        <FlatList
+          data={conversations}
+          renderItem={renderConversationItem}
+          keyExtractor={(item) => item.id.toString()}
+          style={styles.conversationsList}
+          showsVerticalScrollIndicator={false}
+        />
       </View>
       <View style={styles.bottomNav}>
         <TouchableOpacity style={styles.navItem} onPress={() => navigation.navigate("Home")}>
@@ -48,7 +172,7 @@ export default function InboxScreen() {
         </TouchableOpacity>
       </View>
     </SafeAreaView>
-  );
+  )
 }
 
 const styles = StyleSheet.create({
@@ -58,19 +182,81 @@ const styles = StyleSheet.create({
   },
   container: {
     flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    paddingBottom: 110, // Add padding so content isn't covered by nav
+    paddingBottom: 110,
   },
   header: {
+    paddingHorizontal: 20,
+    paddingTop: 10,
+    paddingBottom: 15,
+  },
+  searchContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#F5F5F5",
+    borderRadius: 25,
+    paddingHorizontal: 15,
+    paddingVertical: 12,
+  },
+  searchIcon: {
+    marginRight: 10,
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: 16,
+    color: "#333",
+  },
+  messagesTitle: {
     fontSize: 24,
     fontWeight: "bold",
-    color: "#FF9900",
-    marginBottom: 18,
+    color: "#333",
+    paddingHorizontal: 20,
+    marginBottom: 15,
   },
-  text: {
+  conversationsList: {
+    flex: 1,
+    paddingHorizontal: 20,
+  },
+  conversationItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 15,
+    borderBottomWidth: 1,
+    borderBottomColor: "#F0F0F0",
+  },
+  avatarContainer: {
+    position: "relative",
+    marginRight: 15,
+  },
+  avatar: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+  },
+  unreadDot: {
+    position: "absolute",
+    top: 0,
+    right: 0,
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: "#FF9900",
+  },
+  messageContent: {
+    flex: 1,
+  },
+  senderName: {
     fontSize: 16,
-    color: "#222",
+    fontWeight: "600",
+    color: "#333",
+    marginBottom: 2,
+  },
+  lastMessage: {
+    fontSize: 14,
+    color: "#666",
+  },
+  timestamp: {
+    fontSize: 12,
+    color: "#999",
   },
   bottomNav: {
     position: "absolute",
@@ -112,4 +298,4 @@ const styles = StyleSheet.create({
     borderColor: "#FFF5E9",
     elevation: 5,
   },
-});
+})

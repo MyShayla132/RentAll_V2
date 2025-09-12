@@ -1,24 +1,18 @@
-import React, { useEffect, useState } from "react";
-import {
-  View,
-  Text,
-  StyleSheet,
-  Image,
-  TouchableOpacity,
-  ScrollView,
-  FlatList,
-} from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
-import { Ionicons, AntDesign } from "@expo/vector-icons";
-import { useNavigation } from "@react-navigation/native";
-import { supabase } from "../lib/supabase"; // Adjust path if needed
+"use client"
+
+import { useEffect, useState, useCallback } from "react"
+import { View, Text, StyleSheet, Image, TouchableOpacity, ScrollView, FlatList } from "react-native"
+import { SafeAreaView } from "react-native-safe-area-context"
+import { Ionicons, AntDesign } from "@expo/vector-icons"
+import { useNavigation, useFocusEffect } from "@react-navigation/native"
+import { supabase } from "../lib/supabase" // Adjust path if needed
 
 const transactions = [
-  { key: "Active Rental", icon: "time", color: "#FF9900" },
-  { key: "Pending", icon: "hourglass", color: "#FFB84C" },
-  { key: "Completed", icon: "checkmark-circle-outline", color: "#4CAF50" },
-  { key: "Activity", icon: "list", color: "#888" },
-];
+  { key: "Active Rental", icon: "time", color: "#FF9900", status: "ongoing" },
+  { key: "Pending", icon: "hourglass", color: "#FFB84C", status: "pending" },
+  { key: "Completed", icon: "checkmark-circle-outline", color: "#4CAF50", status: "completed" },
+  { key: "Activity", icon: "list", color: "#888", status: "all" },
+]
 const items = [
   {
     id: "1",
@@ -52,43 +46,121 @@ const items = [
     price: "₱200",
     image: require("../assets/kitchenware.jpg"),
   },
-];
+]
 
 export default function ProfileDefault() {
-  const navigation = useNavigation();
-  const [userInfo, setUserInfo] = useState({ name: "", id: "" });
+  const navigation = useNavigation()
+  const [userInfo, setUserInfo] = useState({ name: "", id: "", legacyId: "" })
+  const [transactionCounts, setTransactionCounts] = useState({
+    ongoing: 0,
+    pending: 0,
+    completed: 0,
+    all: 0,
+  })
+  const [isLoading, setIsLoading] = useState(false) // Added loading state
+
+  const fetchTransactionCounts = async (userId) => {
+    if (!userId) return
+
+    try {
+      setIsLoading(true)
+      const { data: allTransactions, error } = await supabase
+        .from("rental_transactions")
+        .select("status")
+        .eq("user_id", userId)
+
+      if (error) {
+        console.error("Error fetching transactions:", error)
+        return
+      }
+
+      const counts = {
+        ongoing: 0,
+        pending: 0,
+        completed: 0,
+        cancelled: 0,
+        confirmed: 0,
+        all: allTransactions?.length || 0,
+      }
+
+      allTransactions?.forEach((transaction) => {
+        if (counts.hasOwnProperty(transaction.status)) {
+          counts[transaction.status]++
+        }
+      })
+
+      setTransactionCounts(counts)
+    } catch (error) {
+      console.error("Failed to fetch transaction counts:", error)
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const refreshData = useCallback(async () => {
+    if (userInfo.legacyId) {
+      await fetchTransactionCounts(userInfo.legacyId)
+    }
+  }, [userInfo.legacyId])
 
   useEffect(() => {
     const fetchUser = async () => {
       const {
         data: { user },
         error: userError,
-      } = await supabase.auth.getUser();
+      } = await supabase.auth.getUser()
 
       if (user && !userError) {
         const { data: profile, error: profileError } = await supabase
           .from("users")
-          .select("first_name, last_name, user_id")
+          .select("first_name, last_name, user_id, legacy_id")
           .eq("user_id", user.id)
-          .single();
+          .single()
 
         if (profile && !profileError) {
           setUserInfo({
             name: `${profile.first_name} ${profile.last_name}`,
             id: profile.user_id,
-          });
+            legacyId: profile.legacy_id,
+          })
+
+          await fetchTransactionCounts(profile.legacy_id)
         }
       }
-    };
+    }
 
-    fetchUser();
-  }, []);
+    fetchUser()
+  }, [])
+
+  useFocusEffect(
+    useCallback(() => {
+      if (userInfo.legacyId) {
+        fetchTransactionCounts(userInfo.legacyId)
+      }
+    }, [userInfo.legacyId]),
+  )
+
+  const handleTransactionPress = (transaction) => {
+    console.log(`[v0] Navigating to ${transaction.key} with status: ${transaction.status}`)
+
+    const count = transaction.status === "all" ? transactionCounts.all : transactionCounts[transaction.status] || 0
+
+    alert(`${transaction.key}: ${count} transactions`)
+
+    // TODO: Navigate to actual transaction screens
+    // navigation.navigate("TransactionList", { status: transaction.status });
+  }
 
   return (
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.headerRow}>
         <Text style={styles.profileTitle}>Profile</Text>
-        <Ionicons name="menu" size={28} color="#222" />
+        <View style={styles.headerActions}>
+          <TouchableOpacity onPress={refreshData} disabled={isLoading}>
+            <Ionicons name="refresh" size={24} color={isLoading ? "#ccc" : "#222"} style={{ marginRight: 10 }} />
+          </TouchableOpacity>
+          <Ionicons name="menu" size={28} color="#222" />
+        </View>
       </View>
 
       <ScrollView contentContainerStyle={{ paddingBottom: 120 }}>
@@ -99,10 +171,7 @@ export default function ProfileDefault() {
             </View>
             <View style={styles.nameColumn}>
               <Text style={styles.userName}>{userInfo.name}</Text>
-              <TouchableOpacity
-                style={styles.editBtn}
-                onPress={() => navigation.navigate("EditProfile")}
-              >
+              <TouchableOpacity style={styles.editBtn} onPress={() => navigation.navigate("EditProfile")}>
                 <Text style={styles.editBtnText}>Edit Profile</Text>
               </TouchableOpacity>
             </View>
@@ -111,12 +180,19 @@ export default function ProfileDefault() {
 
         <Text style={styles.sectionTitle}>Transaction Management</Text>
         <View style={styles.transactionRow}>
-          {transactions.map((t) => (
-            <View style={styles.transactionItem} key={t.key}>
-              <Ionicons name={t.icon} size={28} color={t.color} />
-              <Text style={styles.transactionText}>{t.key}</Text>
-            </View>
-          ))}
+          {transactions.map((t) => {
+            const count = t.status === "all" ? transactionCounts.all : transactionCounts[t.status] || 0
+
+            return (
+              <TouchableOpacity style={styles.transactionItem} key={t.key} onPress={() => handleTransactionPress(t)}>
+                <Ionicons name={t.icon} size={28} color={t.color} />
+                <Text style={styles.transactionText}>{t.key}</Text>
+                <View style={[styles.countBadge, { backgroundColor: t.color }]}>
+                  <Text style={styles.countText}>{count}</Text>
+                </View>
+              </TouchableOpacity>
+            )
+          })}
         </View>
 
         <View style={styles.divider} />
@@ -146,46 +222,30 @@ export default function ProfileDefault() {
       </ScrollView>
 
       <View style={styles.bottomNav}>
-        <TouchableOpacity
-          style={styles.navItem}
-          onPress={() => navigation.navigate("Home")}
-        >
+        <TouchableOpacity style={styles.navItem} onPress={() => navigation.navigate("Home")}>
           <Ionicons name="home" size={24} color="#000" />
           <Text style={styles.navText}>Home</Text>
         </TouchableOpacity>
-        <TouchableOpacity
-          style={styles.navItem}
-          onPress={() => navigation.navigate("Inbox")}
-        >
+        <TouchableOpacity style={styles.navItem} onPress={() => navigation.navigate("Inbox")}>
           <Ionicons name="chatbubble-ellipses-outline" size={24} color="#000" />
           <Text style={styles.navText}>Inbox</Text>
         </TouchableOpacity>
-        <TouchableOpacity
-          style={styles.addButton}
-          onPress={() => navigation.navigate("PostItems")}
-        >
+        <TouchableOpacity style={styles.addButton} onPress={() => navigation.navigate("PostItems")}>
           <AntDesign name="plus" size={32} color="#fff" />
         </TouchableOpacity>
-        <TouchableOpacity
-          style={styles.navItem}
-          onPress={() => navigation.navigate("Notification")}
-        >
+        <TouchableOpacity style={styles.navItem} onPress={() => navigation.navigate("Notification")}>
           <Ionicons name="notifications-outline" size={24} color="#000" />
           <Text style={styles.navText}>Notification</Text>
         </TouchableOpacity>
-        <TouchableOpacity
-          style={styles.navItem}
-          onPress={() => navigation.navigate("Profile")}
-        >
+        <TouchableOpacity style={styles.navItem} onPress={() => navigation.navigate("Profile")}>
           <Ionicons name="person" size={24} color="#000" />
           <Text style={styles.navText}>Profile</Text>
         </TouchableOpacity>
       </View>
     </SafeAreaView>
-  );
+  )
 }
 
-// styles
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
@@ -274,11 +334,28 @@ const styles = StyleSheet.create({
   transactionItem: {
     alignItems: "center",
     flex: 1,
+    position: "relative",
   },
   transactionText: {
     fontSize: 12,
     color: "#222",
     marginTop: 4,
+  },
+  countBadge: {
+    position: "absolute",
+    top: -5,
+    right: 10,
+    minWidth: 20,
+    height: 20,
+    borderRadius: 10,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 6,
+  },
+  countText: {
+    color: "#fff",
+    fontSize: 10,
+    fontWeight: "bold",
   },
   divider: {
     height: 1,
@@ -378,4 +455,8 @@ const styles = StyleSheet.create({
     borderColor: "#FFF5E9",
     elevation: 5,
   },
-});
+  headerActions: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+})

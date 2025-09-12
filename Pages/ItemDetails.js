@@ -13,6 +13,7 @@ export default function ItemDetailScreen({ route, navigation }) {
   const [loadingLike, setLoadingLike] = useState(false)
   const [ownerName, setOwnerName] = useState("Loading...")
   const [ownerLoading, setOwnerLoading] = useState(true)
+  const [currentUser, setCurrentUser] = useState(null)
 
   useEffect(() => {
     const fetchOwnerInfo = async () => {
@@ -61,6 +62,16 @@ export default function ItemDetailScreen({ route, navigation }) {
     checkIfLiked()
   }, [item.item_id])
 
+  useEffect(() => {
+    const getCurrentUser = async () => {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser()
+      setCurrentUser(user)
+    }
+    getCurrentUser()
+  }, [])
+
   const toggleLike = async () => {
     setLoadingLike(true)
 
@@ -97,6 +108,16 @@ export default function ItemDetailScreen({ route, navigation }) {
     } finally {
       setLoadingLike(false)
     }
+  }
+
+  const handleMessageOwner = () => {
+    navigation.navigate("DirectChat", {
+      itemId: item.item_id,
+      ownerId: item.user_id,
+      ownerName: ownerName,
+      itemName: item.title,
+      itemImage: item.image_url,
+    })
   }
 
   return (
@@ -193,13 +214,25 @@ export default function ItemDetailScreen({ route, navigation }) {
               </Text>
             )}
           </View>
-          <TouchableOpacity style={styles.actionButton} onPress={toggleLike} disabled={loadingLike}>
-            {loadingLike ? (
-              <ActivityIndicator size="small" color="red" />
-            ) : (
-              <AntDesign name={liked ? "heart" : "hearto"} size={24} color={liked ? "red" : "#000"} />
+
+          {/* Action buttons container with message and heart icons */}
+          <View style={styles.actionButtons}>
+            {/* Message icon - only show if current user is not the owner */}
+            {currentUser && currentUser.id !== item.user_id && (
+              <TouchableOpacity style={styles.actionButton} onPress={handleMessageOwner}>
+                <Ionicons name="chatbubble-outline" size={24} color="#000" />
+              </TouchableOpacity>
             )}
-          </TouchableOpacity>
+
+            {/* Heart icon */}
+            <TouchableOpacity style={styles.actionButton} onPress={toggleLike} disabled={loadingLike}>
+              {loadingLike ? (
+                <ActivityIndicator size="small" color="red" />
+              ) : (
+                <AntDesign name={liked ? "heart" : "hearto"} size={24} color={liked ? "red" : "#000"} />
+              )}
+            </TouchableOpacity>
+          </View>
 
           <TouchableOpacity style={styles.rentButton} onPress={() => navigation.navigate("RentingForm", { item })}>
             <Text style={styles.rentButtonText}>Rent Now</Text>
@@ -409,6 +442,10 @@ const styles = StyleSheet.create({
   ownerBottomName: {
     fontSize: 14,
     color: "#333",
+  },
+  actionButtons: {
+    flexDirection: "row",
+    alignItems: "center",
   },
   actionButton: {
     padding: 8,
