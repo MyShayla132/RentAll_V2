@@ -15,6 +15,7 @@ import NotificationScreen from "./Pages/Notification";
 import ItemDetailsScreen from "./Pages/ItemDetails";
 import RentingForm from "./Pages/RentingForm";
 import EditProfile from "./Pages/EditProfile";
+import LikedItemsScreen from "./Pages/LikedItems";
 const Stack = createNativeStackNavigator();
 
 export default function App() {
@@ -37,6 +38,7 @@ export default function App() {
         <Stack.Screen name="ItemDetails" component={ItemDetailsScreen} />
         <Stack.Screen name="RentingForm" component={RentingForm} />
         <Stack.Screen name="EditProfile" component={EditProfile} />
+        <Stack.Screen name="LikedItems" component={LikedItemsScreen} />
       </Stack.Navigator>
     </NavigationContainer>
   );

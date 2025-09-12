@@ -32,9 +32,10 @@ export default function PostItemScreen() {
   const [category, setCategory] = useState("");
   const [categoryOptions, setCategoryOptions] = useState([]);
   const [description, setDescription] = useState("");
-  const [userId, setUserId] = useState(null);
+  const [userId, setUserId] = useState("");
   const [loading, setLoading] = useState(false);
-  
+  const [available, setAvailable] = useState("");
+  const [location, setLocation] = useState("");
 
   useEffect(() => {
     const getUser = async () => {
@@ -146,6 +147,13 @@ export default function PostItemScreen() {
       return;
     }
 
+    const quantityNum = parseInt(available, 10);
+    if (isNaN(quantityNum) || quantityNum < 1) {
+      Alert.alert("Please enter a valid quantity (1 or more).");
+      setLoading(false);
+      return;
+    }
+
     const category_id = await getCategoryId(category);
     if (!category_id) {
       Alert.alert("Failed to get category ID.");
@@ -170,8 +178,9 @@ export default function PostItemScreen() {
       description,
       price_per_day: parseFloat(price),
       deposit_fee: parseFloat(deposit),
-      location: "Cagayan de Oro, Philippines - 9000",
-      available: true,
+      location: location,
+      quantity: quantityNum,
+      available: quantityNum > 0,
       is_verified: false,
       created_at: new Date().toISOString(),
       image_url: imageUrl || null,
@@ -191,6 +200,8 @@ export default function PostItemScreen() {
       setPrice("");
       setDescription("");
       setItemImage(null);
+      setAvailable("");
+      setLocation("");
     }
   };
 
@@ -234,6 +245,18 @@ export default function PostItemScreen() {
             value={name}
             onChangeText={setName}
           />
+          <View style={styles.locationRow}>
+            <Ionicons name="location-outline" size={20} color="#000" />
+            <Text style={styles.locationText}>
+              Cagayan de Oro, Philippines - 9000
+            </Text>
+          </View>
+          <TextInput
+            placeholder="Location"
+            style={styles.input}
+            value={location}
+            onChangeText={setLocation}
+          />
 
           <View style={styles.dropdown}>
             <Picker
@@ -261,9 +284,19 @@ export default function PostItemScreen() {
             value={price}
             onChangeText={setPrice}
           />
+          <TextInput
+            placeholder="How many items available?"
+            style={styles.input}
+            keyboardType="numeric"
+            value={available}
+            onChangeText={setAvailable}
+          />
 
           <View style={styles.dropdown}>
-            <Picker selectedValue={category} onValueChange={setCategory}>
+            <Picker
+              selectedValue={category}
+              onValueChange={(itemValue) => setCategory(itemValue)}
+            >
               {categoryOptions.map((cat) => (
                 <Picker.Item
                   key={cat.category_id}
@@ -272,13 +305,6 @@ export default function PostItemScreen() {
                 />
               ))}
             </Picker>
-          </View>
-
-          <View style={styles.locationRow}>
-            <Ionicons name="location-outline" size={20} color="#000" />
-            <Text style={styles.locationText}>
-              Cagayan de Oro, Philippines - 9000
-            </Text>
           </View>
 
           <TextInput

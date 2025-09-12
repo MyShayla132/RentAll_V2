@@ -12,43 +12,73 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons, AntDesign, FontAwesome } from "@expo/vector-icons";
 import { supabase } from "../lib/supabase";
 
+// Inside ItemDetailScreen.js
 export default function ItemDetailScreen({ route, navigation }) {
   const { item } = route.params;
-  const [ownerName, setOwnerName] = useState("Loading...");
-  const [ownerLoading, setOwnerLoading] = useState(true);
+  const [liked, setLiked] = useState(false); // track if liked
+  const [loadingLike, setLoadingLike] = useState(false);
 
   useEffect(() => {
-    const fetchOwnerName = async () => {
-      try {
-        const { data, error } = await supabase
-          .from("users")
-          .select("first_name, last_name")
-          .eq("user_id", item.user_id)
-          .single();
+    const checkIfLiked = async () => {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) return;
 
-        if (error) {
-          console.error("Error fetching owner:", error);
-          setOwnerName("Unknown Owner");
-        } else {
-          // Combine first_name and last_name
-          const displayName = `${data.first_name || ""} ${data.last_name || ""}`.trim();
-          setOwnerName(displayName || "Unknown Owner");
-        }
-      } catch (err) {
-        console.error("Failed to fetch owner:", err);
-        setOwnerName("Unknown Owner");
-      } finally {
-        setOwnerLoading(false);
-      }
+      const { data, error } = await supabase
+        .from("liked_items")
+        .select("id")
+        .eq("user_id", user.id)
+        .eq("item_id", item.item_id)
+        .single();
+
+      if (data) setLiked(true);
     };
 
-    if (item.user_id) {
-      fetchOwnerName();
+    checkIfLiked();
+  }, [item.item_id]);
+
+  const toggleLike = async () => {
+  setLoadingLike(true);
+
+  try {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) return;
+
+    if (liked) {
+      // Unlike
+      const { error } = await supabase
+        .from("liked_items")
+        .delete()
+        .eq("user_id", user.id)
+        .eq("item_id", item.item_id);
+
+      if (error) throw error;
+      setLiked(false);
     } else {
-      setOwnerName("Unknown Owner");
-      setOwnerLoading(false);
+      // Like (safe insert with upsert to avoid duplicates)
+      const { error } = await supabase.from("liked_items").upsert(
+        [
+          {
+            user_id: user.id,
+            item_id: item.item_id,
+          },
+        ],
+        { onConflict: ["user_id", "item_id"] }
+      );
+
+      if (error) throw error;
+      setLiked(true);
     }
-  }, [item.user_id]);
+  } catch (err) {
+    console.error("Error toggling like:", err.message);
+    alert("Something went wrong. Please try again.");
+  } finally {
+    setLoadingLike(false);
+  }
+};
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -57,10 +87,6 @@ export default function ItemDetailScreen({ route, navigation }) {
         <View style={styles.topBar}>
           <TouchableOpacity onPress={() => navigation.goBack()}>
             <Ionicons name="arrow-back" size={24} color="#000" />
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.likeIcon}>
-            <AntDesign name="hearto" size={22} color="black" />
-            <Text style={styles.likesCount}>0</Text>
           </TouchableOpacity>
         </View>
 
@@ -79,15 +105,19 @@ export default function ItemDetailScreen({ route, navigation }) {
           </Text>
 
           {/* Title & Location */}
+          <View style={styles.section}>
           <Text style={styles.title}>{item.title}</Text>
-          <Text style={styles.location}>{item.location}</Text>
-
+</View>
 
 
           {/* Rental Information */}
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Rental Information</Text>
             <View style={styles.infoCard}>
+              <View style={styles.infoRow}>
+  <Text style={styles.infoLabel}>Available Quantity:</Text>
+  <Text style={styles.infoValue}>{item.quantity}</Text>
+</View>
               <View style={styles.infoRow}>
                 <Text style={styles.infoLabel}>Deposit Required:</Text>
                 <Text style={styles.infoValue}>₱{parseFloat(item.deposit_fee || 0).toFixed(2)}</Text>
@@ -99,6 +129,10 @@ export default function ItemDetailScreen({ route, navigation }) {
               <View style={styles.infoRow}>
                 <Text style={styles.infoLabel}>Description:</Text>
                 <Text style={styles.descriptionText}>{item.description}</Text>
+              </View>
+              <View style={styles.infoRow}>
+                <Text style={styles.infoLabel}>Location:</Text>
+                <Text style={styles.location}>{item.location}</Text>
               </View>
             </View>
           </View>
@@ -146,15 +180,29 @@ export default function ItemDetailScreen({ route, navigation }) {
                 <Text style={styles.ownerLoadingText}>Loading...</Text>
               </View>
             ) : (
-              <Text style={styles.ownerBottomName}>{ownerName}</Text>
-            )}
+              
+              <Text style={styles.ownerBottomName}>
+  <Text style={{ fontWeight: "bold" }}>Owner:</Text> {ownerName}
+</Text>
+            )} 
           </View>
-          <TouchableOpacity style={styles.actionButton}>
-            <Ionicons name="chatbubble-outline" size={24} color="#000" />
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.actionButton}>
-            <AntDesign name="hearto" size={24} color="#000" />
-          </TouchableOpacity>
+          <TouchableOpacity
+  style={styles.actionButton}
+  onPress={toggleLike}
+  disabled={loadingLike}
+>
+  {loadingLike ? (
+    <ActivityIndicator size="small" color="red" />
+  ) : (
+    <AntDesign
+      name={liked ? "heart" : "hearto"}
+      size={24}
+      color={liked ? "red" : "#000"}
+    />
+  )}
+</TouchableOpacity>
+
+
           <TouchableOpacity
             style={styles.rentButton}
             onPress={() => navigation.navigate("RentingForm", { item })}
@@ -208,17 +256,15 @@ const styles = StyleSheet.create({
     color: "#666",
   },
   title: {
-    fontSize: 20,
     fontWeight: "bold",
-    marginHorizontal: 16,
+    fontSize: 18,
     marginBottom: 4,
     color: "#333",
   },
   location: {
-    marginHorizontal: 16,
-    color: "#666",
-    marginBottom: 16,
-    fontSize: 14,
+    fontSize: 15,
+    lineHeight: 22,
+    color: "#444",
   },
   ownerSection: {
     flexDirection: "row",

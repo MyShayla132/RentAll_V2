@@ -25,7 +25,7 @@ export default function OTPScreen() {
   const route = useRoute();
   const navigation = useNavigation();
 
-  const { email, firstName, lastName, birthday, phone, password, validId } =
+  const { email, firstName, lastName, birthday, phone, address, password, validId } =
     route.params || {};
 
   useEffect(() => {
@@ -207,6 +207,7 @@ export default function OTPScreen() {
             last_name: lastName,
             birthday,
             phone,
+            address,
             password_hash: password,
             valid_id_url: idFileUrl,
             created_at: new Date().toISOString(),

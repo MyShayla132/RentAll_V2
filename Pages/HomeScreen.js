@@ -29,10 +29,10 @@ export default function HomeScreen() {
   const fetchItems = async () => {
     setLoading(true);
     const { data, error } = await supabase
-      .from("items")
-      .select("*")
-      .eq("available", true)
-      .eq("is_verified", true);
+  .from("items")
+  .select("*")
+  .eq("available", true)
+  .eq("is_verified", true);
 
     if (error) {
       console.error("Error fetching items:", error);
@@ -47,29 +47,26 @@ export default function HomeScreen() {
     fetchItems();
   }, []);
 
-  const renderItem = ({ item }) => (
-    <TouchableOpacity
-      onPress={() => navigation.navigate("ItemDetails", { item })}
-    >
-      <View style={styles.card}>
-        <Image
-          source={{ uri: item.image_url }}
-          style={styles.cardImage}
-          resizeMode="cover"
-        />
-        <View style={styles.cardContent}>
-          <Text style={styles.cardTitle}>{item.title}</Text>
-          <Text style={styles.cardUser}>{item.location}</Text>
-          <View style={styles.cardFooter}>
-            <Text style={styles.cardPrice}>₱{item.price_per_day}</Text>
-            <TouchableOpacity>
-              <AntDesign name="hearto" size={18} color="#FF9900" />
-            </TouchableOpacity>
-          </View>
+const renderItem = ({ item }) => (
+  <TouchableOpacity
+    onPress={() => navigation.navigate("ItemDetails", { item })}
+  >
+    <View style={styles.card}>
+      <Image
+        source={{ uri: item.image_url }}
+        style={styles.cardImage}
+        resizeMode="cover"
+      />
+      <View style={styles.cardContent}>
+        <Text style={styles.cardTitle}>{item.title}</Text>
+        <Text style={styles.cardUser}>{item.location}</Text>
+        <View style={styles.cardFooter}>
+          <Text style={styles.cardPrice}>₱{item.price_per_day}</Text>
         </View>
       </View>
-    </TouchableOpacity>
-  );
+    </View>
+  </TouchableOpacity>
+);
 
   return (
     <SafeAreaView
@@ -87,9 +84,9 @@ export default function HomeScreen() {
             <Text style={styles.searchButtonText}>Search</Text>
           </TouchableOpacity>
         </View>
-        <TouchableOpacity>
-          <AntDesign name="hearto" size={26} color="#000" />
-        </TouchableOpacity>
+        <TouchableOpacity onPress={() => navigation.navigate("LikedItems")}>
+  <AntDesign name="hearto" size={26} color="#000" />
+</TouchableOpacity>
       </View>
 
       <ScrollView

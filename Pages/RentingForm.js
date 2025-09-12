@@ -21,12 +21,7 @@ import { Buffer } from "buffer";
 global.Buffer = global.Buffer || Buffer;
 import DateTimePicker from "@react-native-community/datetimepicker";
 import DropDownPicker from "react-native-dropdown-picker";
-import { createClient } from "@supabase/supabase-js";
-
-const supabaseUrl = "https://fxluryosukljugnsfkcm.supabase.co";
-const supabaseAnonKey =
-  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZ4bHVyeW9zdWtsanVnbnNma2NtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTA2MTQ5NzIsImV4cCI6MjA2NjE5MDk3Mn0.YYUF8BLpOKND8998OYrcx9AcsMFXiSv1zxFiTximF00";
-const supabase = createClient(supabaseUrl, supabaseAnonKey);
+import { supabase } from '../lib/supabase';
 
 export default function RentingForm({ route, navigation }) {
   const { item } = route.params;
@@ -40,6 +35,8 @@ export default function RentingForm({ route, navigation }) {
   const [deliveryMethod, setDeliveryMethod] = useState("Pickup");
   const [paymentOpen, setPaymentOpen] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [quantity, setQuantity] = useState(1);
+  
   
   // User info states
   const [userInfo, setUserInfo] = useState({
@@ -239,16 +236,17 @@ export default function RentingForm({ route, navigation }) {
       }
 
       const rentalData = {
-        item_id: item.id,
-        user_id: userInfo.legacy_id,
-        start_date: startDate.toISOString().split("T")[0],
-        end_date: endDate.toISOString().split("T")[0],
-        total_cost: estimatedTotal,
-        status: "pending",
-        proof_of_deposit: receiptUrl,
-        payment_method: paymentMethod,
-        delivery_method: deliveryMethod,
-      };
+  item_id: item.id,
+  user_id: userInfo.legacy_id,
+  start_date: startDate.toISOString().split("T")[0],
+  end_date: endDate.toISOString().split("T")[0],
+  total_cost: estimatedTotal,
+  status: "pending",
+  proof_of_deposit: receiptUrl,
+  payment_method: paymentMethod,
+  delivery_method: deliveryMethod,
+  quantity, 
+};
 
       const { error } = await supabase
         .from("rental_transactions")
@@ -299,6 +297,39 @@ export default function RentingForm({ route, navigation }) {
               <Text style={styles.itemDeposit}>Deposit: ₱{item.deposit_fee}</Text>
             </View>
           </View>
+          <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 16 }}>
+  <Text style={{ fontSize: 16, fontWeight: "bold", marginRight: 12 }}>Quantity:</Text>
+  <TouchableOpacity
+    onPress={() => setQuantity(q => Math.max(1, q - 1))}
+    style={{
+      padding: 8,
+      backgroundColor: "#eee",
+      borderRadius: 8,
+      marginRight: 8,
+      opacity: quantity === 1 ? 0.5 : 1,
+    }}
+    disabled={quantity === 1}
+  >
+    <Text style={{ fontSize: 18 }}>-</Text>
+  </TouchableOpacity>
+  <Text style={{ fontSize: 16, minWidth: 32, textAlign: "center" }}>{quantity}</Text>
+  <TouchableOpacity
+    onPress={() => setQuantity(q => Math.min(item.quantity, q + 1))}
+    style={{
+      padding: 8,
+      backgroundColor: "#eee",
+      borderRadius: 8,
+      marginLeft: 8,
+      opacity: quantity === item.quantity ? 0.5 : 1,
+    }}
+    disabled={quantity === item.quantity}
+  >
+    <Text style={{ fontSize: 18 }}>+</Text>
+  </TouchableOpacity>
+  <Text style={{ marginLeft: 12, color: "#888" }}>
+    (Available: {item.quantity})
+  </Text>
+</View>
 
           {/* Rental Duration Section */}
           <View style={styles.section}>
