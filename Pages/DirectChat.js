@@ -23,11 +23,43 @@ const DirectChat = ({ route, navigation }) => {
   const [currentUserId, setCurrentUserId] = useState(null)
   const [loading, setLoading] = useState(true)
   const flatListRef = useRef(null)
+  const subscriptionRef = useRef(null)
 
   useEffect(() => {
     getCurrentUser()
     fetchMessages()
+    setupRealtimeSubscription()
+
+    return () => {
+      if (subscriptionRef.current) {
+        subscriptionRef.current.unsubscribe()
+      }
+    }
   }, [])
+
+  const setupRealtimeSubscription = () => {
+    subscriptionRef.current = supabase
+      .channel(`messages_${itemId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "messages",
+          filter: `item_id=eq.${itemId}`,
+        },
+        (payload) => {
+          console.log("[v0] New message received:", payload.new)
+          setMessages((prevMessages) => [...prevMessages, payload.new])
+          setTimeout(() => {
+            flatListRef.current?.scrollToEnd({ animated: true })
+          }, 100)
+        },
+      )
+      .subscribe((status) => {
+        console.log("[v0] Subscription status:", status)
+      })
+  }
 
   const getCurrentUser = async () => {
     try {
@@ -74,7 +106,6 @@ const DirectChat = ({ route, navigation }) => {
       if (error) throw error
 
       setNewMessage("")
-      fetchMessages()
     } catch (error) {
       console.error("Error sending message:", error)
       Alert.alert("Error", "Failed to send message. Please try again.")

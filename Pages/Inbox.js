@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect, useCallback, useRef } from "react"
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, FlatList, Image } from "react-native"
 import { Ionicons, AntDesign } from "@expo/vector-icons"
 import { SafeAreaView } from "react-native-safe-area-context"
@@ -12,18 +12,58 @@ export default function InboxScreen() {
   const [conversations, setConversations] = useState([])
   const [searchQuery, setSearchQuery] = useState("")
   const [currentUserId, setCurrentUserId] = useState(null)
+  const subscriptionRef = useRef(null)
 
   useEffect(() => {
     getCurrentUser()
+  }, [])
+
+  useEffect(() => {
+    return () => {
+      if (subscriptionRef.current) {
+        subscriptionRef.current.unsubscribe()
+      }
+    }
   }, [])
 
   useFocusEffect(
     useCallback(() => {
       if (currentUserId) {
         fetchConversations()
+        setupRealtimeSubscription()
+      }
+      return () => {
+        if (subscriptionRef.current) {
+          subscriptionRef.current.unsubscribe()
+        }
       }
     }, [currentUserId]),
   )
+
+  const setupRealtimeSubscription = () => {
+    if (subscriptionRef.current) {
+      subscriptionRef.current.unsubscribe()
+    }
+
+    subscriptionRef.current = supabase
+      .channel(`inbox_${currentUserId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "messages",
+          filter: `receiver_id=eq.${currentUserId}`,
+        },
+        (payload) => {
+          console.log("[v0] New message received in inbox:", payload.new)
+          fetchConversations()
+        },
+      )
+      .subscribe((status) => {
+        console.log("[v0] Inbox subscription status:", status)
+      })
+  }
 
   const getCurrentUser = async () => {
     try {
